@@ -26,7 +26,9 @@ current_config = {
     "pixel_distance_mm": 10.0,          # millimeters per pixel (can be updated in real-time)
     "enable_tracking": True,             # requires restart
     "enable_speed_estimation": True,     # requires restart
-    "target_labels": ["person", "car"]  # requires restart
+    "target_labels": ["person", "car"], # requires restart
+    "enable_loitering_detection": False, # can be updated in real-time
+    "loitering_threshold": 10.0         # seconds, can be updated in real-time
 }
 
 # Video frame queue for streaming (increased size to reduce flickering)
@@ -96,6 +98,12 @@ def create_detection_pipeline(config):
                     fps = video_fps
             speed_manager = SpeedEstimationManager(pixel_distance=pixel_distance_m, fps=fps)
 
+        # Initialize loitering detection manager to persist across frames
+        from object_detection_post_process import LoiteringDetectionManager
+        fps_for_loitering = speed_manager.fps if speed_manager else 30.0
+        loitering_manager = LoiteringDetectionManager(loitering_threshold=config.get("loitering_threshold", 10.0),
+                                                       fps=fps_for_loitering)
+
         # Create a callback that can access the global config for real-time updates
         def post_process_callback_with_realtime_config(original_frame, infer_results):
             # Check if stop was requested
@@ -106,6 +114,13 @@ def create_detection_pipeline(config):
             with config_lock:
                 current_confidence = current_config["confidence_threshold"]
                 current_pixel_distance = current_config["pixel_distance_mm"] / 1000.0  # Convert to meters
+                current_loitering_threshold = current_config.get("loitering_threshold", 10.0)
+                current_loitering_enabled = current_config.get("enable_loitering_detection", False)
+
+            # Update loitering manager threshold if changed
+            loitering_manager.loitering_threshold = current_loitering_threshold
+            fps_for_update = speed_manager.fps if speed_manager else 30.0
+            loitering_manager.frame_threshold = current_loitering_threshold * fps_for_update
 
             # Update config data with current confidence
             config_data = base_config_data.copy()
@@ -120,7 +135,11 @@ def create_detection_pipeline(config):
                 pixel_distance=current_pixel_distance,  # Use current pixel distance
                 speed_estimation=config["enable_speed_estimation"],
                 speed_manager=speed_manager,
-                target_labels=config["target_labels"]
+                target_labels=config["target_labels"],
+                loitering_detection=current_loitering_enabled,
+                loitering_manager=loitering_manager,
+                loitering_threshold=current_loitering_threshold,
+                enable_person_only="person" in config["target_labels"]
             )
 
             # Put the processed frame in our queue for streaming

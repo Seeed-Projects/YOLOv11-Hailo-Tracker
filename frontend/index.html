@@ -117,6 +117,28 @@
             100% { box-shadow: 0 8px 25px rgba(79, 172, 254, 0.4); }
         }
 
+        .connection-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .connection-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            transition: background-color 0.3s ease;
+        }
+
+        .connection-dot.connected {
+            background-color: #00ff00;  /* Green for connected */
+        }
+
+        .connection-dot.disconnected {
+            background-color: #ff0000;  /* Red for disconnected */
+        }
+
         .dashboard {
             display: flex;
             flex-direction: row;
@@ -522,11 +544,10 @@
                 </div>
                 <div class="logo-icon">⚡</div>
             </div>
+            <div class="connection-indicator" id="connectionIndicator">
+                <div class="connection-dot connected" id="connectionDot" title="Connected"></div>
+            </div>
         </header>
-
-        <div class="status-bar">
-            <div id="status" class="status stopped">Status: Stopped | FPS: 0.0</div>
-        </div>
 
         <div class="dashboard">
             <div class="controls-panel">
@@ -552,6 +573,13 @@
                         <input type="number" id="pixelDistance" min="0.1" max="1000" step="0.1" value="10.0">
                     </div>
                     <div class="real-time-note">Physical distance per pixel (mm)</div>
+
+                    <div class="form-row">
+                        <label for="loiteringThreshold">Loitering Threshold (s):</label>
+                        <input type="range" id="loiteringThreshold" min="1" max="60" step="1" value="10">
+                        <div class="value-display" id="loiteringThresholdValue">10</div>
+                    </div>
+                    <div class="real-time-note">Time threshold for loitering detection (seconds)</div>
                 </div>
 
                 <div class="control-group">
@@ -566,6 +594,17 @@
                         </div>
                     </div>
                     <div class="real-time-note">Calculates and displays object speeds</div>
+
+                    <div class="form-row">
+                        <label for="loiteringToggle">Loitering Detection:</label>
+                        <div class="toggle-container">
+                            <label class="switch">
+                                <input type="checkbox" id="loiteringToggle">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="real-time-note">Highlights objects present for extended periods (only for persons)</div>
                 </div>
 
                 <div class="control-group">
@@ -605,13 +644,18 @@
         const confidenceValue = document.getElementById('confidenceValue');
         const pixelDistanceInput = document.getElementById('pixelDistance');
         const speedEstimationToggle = document.getElementById('speedEstimationToggle');
+        const loiteringToggle = document.getElementById('loiteringToggle');
+        const loiteringThreshold = document.getElementById('loiteringThreshold');
+        const loiteringThresholdValue = document.getElementById('loiteringThresholdValue');
         const targetLabelsInput = document.getElementById('targetLabels');
         const videoSourceSelect = document.getElementById('videoSource');
-        const statusDiv = document.getElementById('status');
+        const connectionDot = document.getElementById('connectionDot');
         const videoStreamImg = document.getElementById('videoStream');
 
         // Flags to track user edits
         let userEditedLabels = false;
+        let userEditedLoitering = false;
+        let userEditedLoiteringThreshold = false;
         
 
         // Update confidence value display
@@ -640,6 +684,19 @@
             if (!isNaN(value) && value >= 0.1 && value <= 1000) {
                 updateRealtimeConfig('pixel_distance_mm', value);
             }
+        });
+
+        // Update loitering threshold value display
+        loiteringThreshold.addEventListener('input', () => {
+            userEditedLoiteringThreshold = true;
+            loiteringThresholdValue.textContent = loiteringThreshold.value;
+            updateRealtimeConfig('loitering_threshold', parseFloat(loiteringThreshold.value));
+        });
+
+        // Update loitering detection toggle
+        loiteringToggle.addEventListener('change', () => {
+            userEditedLoitering = true;
+            updateRealtimeConfig('enable_loitering_detection', loiteringToggle.checked);
         });
 
         // Track user edits to the target labels field
@@ -682,14 +739,18 @@
                     confidence_threshold: parseFloat(confidenceSlider.value),
                     pixel_distance_mm: parseFloat(pixelDistanceInput.value),
                     enable_speed_estimation: speedEstimationToggle.checked,
+                    enable_loitering_detection: loiteringToggle.checked,
+                    loitering_threshold: parseFloat(loiteringThreshold.value),
                     target_labels: targetLabelsInput.value.split(',').map(label => label.trim()).filter(label => label.length > 0)
                 })
             })
             .then(response => response.json())
             .then(data => {
                 console.log('Start response:', data);
-                // Reset the user edit flag since changes have been sent to backend
+                // Reset the user edit flags since changes have been sent to backend
                 userEditedLabels = false;
+                userEditedLoitering = false;
+                userEditedLoiteringThreshold = false;
                 setTimeout(() => updateStatus(), 500); // Update status after start
             })
             .catch(error => {
@@ -708,8 +769,10 @@
             .then(response => response.json())
             .then(data => {
                 console.log('Stop response:', data);
-                // Reset the user edit flag when stopping so backend config is shown
+                // Reset the user edit flags when stopping so backend config is shown
                 userEditedLabels = false;
+                userEditedLoitering = false;
+                userEditedLoiteringThreshold = false;
                 setTimeout(() => updateStatus(), 500); // Update status after stop
             })
             .catch(error => {
@@ -741,9 +804,9 @@
             fetch('/api/status')
             .then(response => response.json())
             .then(data => {
-                const statusText = data.running ? 'Running' : 'Stopped';
-                statusDiv.innerHTML = `Status: ${statusText} | FPS: ${data.fps ? data.fps.toFixed(1) : 'N/A'}`;
-                statusDiv.className = `status ${data.running ? 'running' : 'stopped'}`;
+                // Update connection indicator - when we successfully get status, we're connected
+                connectionDot.className = 'connection-dot connected';
+                connectionDot.title = 'Connected';
 
                 // Update UI based on status
                 startBtn.disabled = data.running;
@@ -755,6 +818,15 @@
                     confidenceValue.textContent = parseFloat(data.config.confidence_threshold).toFixed(2);
                     pixelDistanceInput.value = data.config.pixel_distance_mm;
                     speedEstimationToggle.checked = data.config.enable_speed_estimation;
+                    // Only update loitering detection from backend if user hasn't edited it
+                    if (!userEditedLoitering) {
+                        loiteringToggle.checked = data.config.enable_loitering_detection;
+                    }
+                    // Only update loitering threshold from backend if user hasn't edited it
+                    if (!userEditedLoiteringThreshold) {
+                        loiteringThreshold.value = data.config.loitering_threshold;
+                        loiteringThresholdValue.textContent = data.config.loitering_threshold;
+                    }
                     // Only update target labels from backend if user hasn't edited them
                     if (!userEditedLabels) {
                         targetLabelsInput.value = data.config.target_labels.join(', ');
@@ -765,8 +837,9 @@
             })
             .catch(error => {
                 console.error('Error getting status:', error);
-                statusDiv.innerHTML = 'Status: Connection Error';
-                statusDiv.className = 'status stopped';
+                // Update connection indicator to show disconnected state
+                connectionDot.className = 'connection-dot disconnected';
+                connectionDot.title = 'Disconnected';
             });
         }
 

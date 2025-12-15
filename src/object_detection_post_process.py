@@ -3,12 +3,79 @@ import numpy as np
 from utils.toolbox import id_to_color
 from speed_estimation import SpeedEstimationManager
 import time
+from collections import defaultdict
+
+
+class LoiteringDetectionManager:
+    """
+    Manager for detecting loitering objects based on how long they've been present
+    """
+    def __init__(self, loitering_threshold=10.0, fps=30.0):
+        """
+        Initialize loitering detection manager
+
+        Args:
+            loitering_threshold (float): Time threshold in seconds for loitering detection
+            fps (float): Frames per second of the video stream
+        """
+        self.loitering_threshold = loitering_threshold  # seconds
+        self.frame_threshold = loitering_threshold * fps  # convert to frames
+        self.track_start_frames = defaultdict(int)  # track_id -> start frame number
+        self.current_frame = 0
+
+    def update_frame_count(self):
+        """Increment the current frame number"""
+        self.current_frame += 1
+
+    def update_track(self, track_id):
+        """
+        Update the start frame for a track ID if it's not already being tracked
+
+        Args:
+            track_id: Unique identifier for the tracked object
+        """
+        if track_id not in self.track_start_frames:
+            self.track_start_frames[track_id] = self.current_frame
+
+    def is_loitering(self, track_id):
+        """
+        Check if a track ID is considered loitering
+
+        Args:
+            track_id: Unique identifier for the tracked object
+
+        Returns:
+            bool: True if the object has been present for longer than the threshold
+        """
+        if track_id not in self.track_start_frames:
+            return False
+
+        frames_present = self.current_frame - self.track_start_frames[track_id]
+        return frames_present > self.frame_threshold
+
+    def cleanup_missing_tracks(self, current_track_ids):
+        """
+        Remove tracks that are no longer present
+
+        Args:
+            current_track_ids: Set of currently active track IDs
+        """
+        # Remove tracks that are no longer present
+        ids_to_remove = []
+        for track_id in self.track_start_frames:
+            if track_id not in current_track_ids:
+                ids_to_remove.append(track_id)
+
+        for track_id in ids_to_remove:
+            del self.track_start_frames[track_id]
 
 
 def inference_result_handler(original_frame, infer_results, labels, config_data,
                             tracker=None, camera_width=640, camera_height=480,
                             pixel_distance=0.01, speed_estimation=False, speed_manager=None,
-                            target_labels=None):
+                            target_labels=None, loitering_detection=False,
+                            loitering_manager=None, loitering_threshold=10.0,
+                            enable_person_only=False):
     """
     Processes inference results and draw detections (with optional tracking).
 
@@ -36,10 +103,27 @@ def inference_result_handler(original_frame, infer_results, labels, config_data,
     if target_labels is None:
         target_labels = ["person", "car"]
 
+    # Check if person detection is required for loitering
+    person_class_index = -1
+    if enable_person_only or loitering_detection:
+        for idx, label in enumerate(labels):
+            if label == "person":
+                person_class_index = idx
+                break
+
+        # If person detection is required but not found in labels, disable loitering
+        if enable_person_only and person_class_index == -1:
+            loitering_detection = False
+
     detections = extract_detections(original_frame, infer_results, config_data, labels, target_labels)  #should return dict with boxes, classes, scores
     frame_with_detections = draw_detections(detections, original_frame, labels,
                                           tracker=tracker, speed_manager=speed_manager,
-                                          target_labels=target_labels)
+                                          target_labels=target_labels,
+                                          loitering_detection=loitering_detection,
+                                          loitering_manager=loitering_manager,
+                                          loitering_threshold=loitering_threshold,
+                                          enable_person_only=enable_person_only,
+                                          person_class_index=person_class_index)
     return frame_with_detections
 
 
@@ -177,7 +261,8 @@ def extract_detections(image: np.ndarray, detections: list, config_data, labels,
     }
 
 
-def draw_detections(detections: dict, img_out: np.ndarray, labels, tracker=None, speed_manager=None, target_labels=None):
+def draw_detections(detections: dict, img_out: np.ndarray, labels, tracker=None, speed_manager=None, target_labels=None,
+                    loitering_detection=False, loitering_manager=None, loitering_threshold=10.0, enable_person_only=False, person_class_index=-1):
     """
     Draw detections or tracking results on the image.
 
@@ -244,14 +329,38 @@ def draw_detections(detections: dict, img_out: np.ndarray, labels, tracker=None,
         #run BYTETracker and get active tracks
         online_targets = tracker.update(np.array(dets_for_tracker))
 
+        # Update loitering manager with the current frame count
+        if loitering_manager:
+            loitering_manager.update_frame_count()
+
         #draw tracked bounding boxes with ID labels
+        current_track_ids = set()
         for track in online_targets:
             track_id = track.track_id  #unique tracker ID
             x1, y1, x2, y2 = track.tlbr  #bounding box (top-left, bottom-right)
             xmin, ymin, xmax, ymax = map(int, [x1, y1, x2, y2])
             best_idx = find_best_matching_detection_index(track.tlbr, boxes)
             if best_idx is not None:  # Only process if we found a matching detection
+                current_track_ids.add(track_id)
+
+                # Get original color based on class
                 color = tuple(id_to_color(classes[best_idx]).tolist())  # color based on class
+
+                # Check for loitering if enabled and person is detected (if required)
+                is_loitering = False
+                if loitering_detection:
+                    # Check if person detection is required and if this is a person
+                    is_person = (person_class_index != -1 and classes[best_idx] == person_class_index)
+                    is_relevant = (not enable_person_only or is_person)
+
+                    if is_relevant and loitering_manager:
+                        # Update the loitering manager with this track
+                        loitering_manager.update_track(track_id)
+                        is_loitering = loitering_manager.is_loitering(track_id)
+
+                        # Change color to red if loitering
+                        if is_loitering:
+                            color = (0, 0, 255)  # Red color for loitering detection
 
                 # Calculate and display speed if speed estimation is enabled
                 speed = None
@@ -269,6 +378,10 @@ def draw_detections(detections: dict, img_out: np.ndarray, labels, tracker=None,
                 # Only draw pedestrian detections with tracking info and speed
                 draw_detection(img_out, [xmin, ymin, xmax, ymax], [labels[classes[best_idx]], f"ID {track_id}"],
                                track.score * 100.0, color, track=True, speed=display_speed)
+
+        # Clean up the loitering manager with tracks that are no longer present
+        if loitering_manager:
+            loitering_manager.cleanup_missing_tracks(current_track_ids)
 
 
     else:

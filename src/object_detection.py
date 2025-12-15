@@ -204,13 +204,22 @@ def run_inference_pipeline(net, input, batch_size, labels, output_dir,
     else:
         speed_manager = None
 
-    # Prepare callback with additional parameters for speed estimation
+    # Initialize loitering detection manager if needed
+    loitering_manager = None
+    loitering_detection_enabled = False
+    enable_person_only = "person" in (target_labels or ["person", "car"])
+
+    # Prepare callback with additional parameters for speed estimation and loitering detection
     post_process_callback_fn = partial(
         inference_result_handler, labels=labels,
         config_data=config_data, tracker=tracker,
         camera_width=camera_width, camera_height=camera_height,
         pixel_distance=pixel_distance, speed_estimation=speed_estimation,
-        speed_manager=speed_manager, target_labels=target_labels
+        speed_manager=speed_manager, target_labels=target_labels,
+        loitering_detection=loitering_detection_enabled,
+        loitering_manager=loitering_manager,
+        loitering_threshold=10.0,  # Default threshold of 10 seconds
+        enable_person_only=enable_person_only
     )
 
     hailo_inference = HailoInfer(net, batch_size)
