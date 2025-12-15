@@ -21,7 +21,8 @@ YOLOv11-Speed/
 ├── Docker.md                 # Docker documentation
 ├── Dockerfile               # Docker build configuration
 ├── requirements.txt         # Python dependencies
-├── run_detection.py         # Main entry point
+├── run_detection.py         # Main entry point (CLI)
+├── run_api.py              # API server entry point
 ├── .env/                    # Environment configuration
 ├── .github/                 # GitHub workflows and actions
 ├── output/                  # Output directory for results
@@ -30,6 +31,7 @@ YOLOv11-Speed/
     ├── object_detection.py              # Main detection pipeline
     ├── object_detection_post_process.py # Post-processing and visualization
     ├── speed_estimation.py             # Speed calculation algorithms
+    ├── api_server.py                   # Flask API server for web integration
     ├── config/                        # Configuration files
     │   ├── __init__.py
     │   ├── config.json                # Detection and tracking parameters
@@ -138,6 +140,251 @@ python run_detection.py -i camera -n src/models/yolov11n.hef --track --resolutio
 
 # With FPS display
 python run_detection.py -i camera -n src/models/yolov11n.hef --track --show-fps
+```
+
+## 🌐 Web API Usage
+
+The project includes a Flask-based REST API server for frontend integration. The API provides endpoints for controlling detection, configuring parameters, and streaming video.
+
+### Starting the API Server
+
+```bash
+# Start the API server
+python run_api.py
+```
+
+The server will start on `http://0.0.0.0:5000` by default.
+
+### Web Interface
+
+The API server includes a modern, responsive web interface for easy interaction with the detection system. Access it at `http://localhost:5000/` after starting the server.
+
+**Features of the Web Interface:**
+- Real-time video streaming from the detection system
+- Start/stop detection controls
+- Configuration of detection parameters (confidence threshold, pixel distance, etc.)
+- Toggle for tracking and speed estimation features
+- Ability to specify target labels (person, car, etc.)
+- Real-time statistics display (FPS, number of viewers)
+- Status indicators for system state
+- Mobile-responsive design
+
+### API Endpoints
+
+#### 1. Get Status
+```http
+GET /api/status
+```
+Returns the current detection status, configuration, and FPS.
+
+**Response:**
+```json
+{
+  "running": false,
+  "config": {
+    "video_source": "camera",
+    "confidence_threshold": 0.25,
+    "pixel_distance_mm": 10.0,
+    "enable_tracking": true,
+    "enable_speed_estimation": true,
+    "target_labels": ["person", "car"]
+  },
+  "fps": 0.0
+}
+```
+
+#### 2. Start Detection
+```http
+POST /api/start
+```
+Starts the detection pipeline with current configuration.
+
+**Response:**
+```json
+{
+  "message": "Detection started successfully",
+  "status": "running"
+}
+```
+
+#### 3. Stop Detection
+```http
+POST /api/stop
+```
+Stops the detection pipeline.
+
+**Response:**
+```json
+{
+  "message": "Detection stopped successfully",
+  "status": "stopped"
+}
+```
+
+#### 4. Get Configuration
+```http
+GET /api/config
+```
+Returns the current configuration.
+
+#### 5. Update Configuration
+```http
+POST /api/config
+Content-Type: application/json
+
+{
+  "video_source": "camera",           // "camera" or video file path
+  "confidence_threshold": 0.3,         // 0.0 to 1.0 (can be updated while running)
+  "pixel_distance_mm": 15.0,          // millimeters per pixel (can be updated in real-time)
+  "enable_tracking": true,             // requires restart
+  "enable_speed_estimation": true,     // requires restart
+  "target_labels": ["person", "car"]  // requires restart
+}
+```
+
+**Note:** Some configuration changes require stopping and restarting detection:
+- `video_source`: Must stop detection first
+- `enable_tracking`: Must stop detection first
+- `enable_speed_estimation`: Must stop detection first
+- `target_labels`: Must stop detection first
+- `confidence_threshold`: Can be updated in real-time
+- `pixel_distance_mm`: Can be updated in real-time
+
+#### 6. Video Stream
+```http
+GET /api/video_stream
+```
+Returns an MJPEG video stream of the detection results. Use this in an HTML `<img>` tag:
+
+```html
+<img src="http://localhost:5000/api/video_stream" alt="Video Stream" />
+```
+
+#### 7. Health Check
+```http
+GET /api/health
+```
+Returns server health status.
+
+### Frontend Integration Example
+
+```javascript
+// Start detection
+async function startDetection() {
+  const response = await fetch('http://localhost:5000/api/start', {
+    method: 'POST'
+  });
+  const data = await response.json();
+  console.log(data);
+}
+
+// Stop detection
+async function stopDetection() {
+  const response = await fetch('http://localhost:5000/api/stop', {
+    method: 'POST'
+  });
+  const data = await response.json();
+  console.log(data);
+}
+
+// Update confidence threshold (real-time)
+async function updateConfidence(threshold) {
+  const response = await fetch('http://localhost:5000/api/config', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      confidence_threshold: threshold
+    })
+  });
+  const data = await response.json();
+  console.log(data);
+}
+
+// Update pixel distance (real-time)
+async function updatePixelDistance(mm) {
+  const response = await fetch('http://localhost:5000/api/config', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      pixel_distance_mm: mm
+    })
+  });
+  const data = await response.json();
+  console.log(data);
+}
+
+// Configure video source (requires restart)
+async function setVideoSource(source) {
+  // First stop detection
+  await stopDetection();
+
+  // Update config
+  const response = await fetch('http://localhost:5000/api/config', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      video_source: source  // "camera" or "/path/to/video.mp4"
+    })
+  });
+  const data = await response.json();
+  console.log(data);
+
+  // Restart detection
+  await startDetection();
+}
+
+// Get status
+async function getStatus() {
+  const response = await fetch('http://localhost:5000/api/status');
+  const data = await response.json();
+  return data;
+}
+```
+
+### HTML Example
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>YOLOv11 Detection</title>
+</head>
+<body>
+  <div>
+    <button onclick="startDetection()">Start Detection</button>
+    <button onclick="stopDetection()">Stop Detection</button>
+  </div>
+  
+  <div>
+    <label>Confidence Threshold:</label>
+    <input type="range" min="0" max="1" step="0.01" value="0.25" 
+           onchange="updateConfidence(this.value)">
+    <span id="confidenceValue">0.25</span>
+  </div>
+  
+  <div>
+    <label>Pixel Distance (mm):</label>
+    <input type="number" value="10" min="1" max="100" 
+           onchange="updatePixelDistance(this.value)">
+  </div>
+  
+  <div>
+    <img id="videoStream" src="http://localhost:5000/api/video_stream" 
+         alt="Video Stream" style="max-width: 100%;">
+  </div>
+  
+  <script>
+    // Include the JavaScript functions from above
+    // ...
+  </script>
+</body>
+</html>
 ```
 
 ## ⚙️ Configuration

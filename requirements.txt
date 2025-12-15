@@ -6,5 +6,10 @@ scipy
 lap
 cython_bbox
 
+# Web API dependencies
+flask
+flask-cors
+flask-socketio
+
 # Dependencies for speed estimation and tracking
 # All required dependencies are already included above
