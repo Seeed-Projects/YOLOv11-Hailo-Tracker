@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLOv11 Detection Control Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf9 100%);
+            color: #333;
+            line-height: 1.6;
+            overflow-x: auto;  /* Allow horizontal scrolling if needed */
+        }
+
+        body {
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 100%;
+            width: 100%;
+            height: 100vh;  /* Full viewport height */
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            text-align: center;
+            padding: 12px 15px;  /* Reduced from 20px for more compact header */
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        header::before {
+            content: "";
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
+            transform: rotate(30deg);
+        }
+
+        h1 {
+            font-size: 2.2rem;  /* Reduced from 2.8rem for more compact header */
+            margin-bottom: 6px;  /* Reduced from 10px */
+            position: relative;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.2);  /* Slightly reduced shadow */
+        }
+
+        .subtitle {
+            font-size: 0.95rem;  /* Reduced from 1.2rem for more compact header */
+            opacity: 0.9;
+            position: relative;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;  /* Reduced from 30px */
+            margin: 15px 0;  /* Reduced from 25px */
+            flex-wrap: wrap;
+            flex-shrink: 0;  /* Don't shrink */
+        }
+
+        .status {
+            padding: 18px 35px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 1.2rem;
+            text-align: center;
+            min-width: 250px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 2px solid;
+            transition: all 0.3s ease;
+        }
+
+        .running {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border-color: rgba(255, 255, 255, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        .stopped {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: white;
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 8px 25px rgba(79, 172, 254, 0.4); }
+            50% { box-shadow: 0 12px 35px rgba(79, 172, 254, 0.6); }
+            100% { box-shadow: 0 8px 25px rgba(79, 172, 254, 0.4); }
+        }
+
+        .connection-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .connection-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            transition: background-color 0.3s ease;
+        }
+
+        .connection-dot.connected {
+            background-color: #00ff00;  /* Green for connected */
+        }
+
+        .connection-dot.disconnected {
+            background-color: #ff0000;  /* Red for disconnected */
+        }
+
+        .dashboard {
+            display: flex;
+            flex-direction: row;
+            flex: 1;  /* Take remaining space */
+            gap: 20px;  /* Reduced from 25px */
+            padding: 20px;  /* Reduced from 25px */
+            overflow: auto;  /* Allow scrolling if needed */
+        }
+
+        @media (max-width: 1200px) {
+            .dashboard {
+                flex-direction: column;
+            }
+
+            .controls-panel {
+                min-width: unset;  /* Remove min-width constraint on smaller screens */
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                padding: 15px;
+                gap: 15px;
+            }
+
+            h1 {
+                font-size: 2.2rem;  /* Smaller on mobile */
+            }
+
+            .subtitle {
+                font-size: 1rem;  /* Smaller on mobile */
+            }
+        }
+
+        /* For larger screens, make better use of available space */
+        @media (min-width: 1920px) {
+            .control-group h3 {
+                font-size: 1.6rem;  /* Increase on large screens */
+            }
+
+            h1 {
+                font-size: 3.5rem;  /* Increase header size */
+            }
+
+            .btn {
+                padding: 10px 25px;  /* Slightly increase button size */
+                font-size: 1.1rem;  /* Slightly increase font */
+            }
+
+            .dashboard {
+                gap: 30px;  /* Increase gap on large screens */
+                padding: 30px;  /* Increase padding on large screens */
+            }
+        }
+
+        /* For very large screens */
+        @media (min-width: 2560px) {
+            h1 {
+                font-size: 4rem;  /* Even larger on very large screens */
+            }
+
+            .control-group h3 {
+                font-size: 1.8rem;  /* Even larger headers */
+            }
+
+            .status {
+                padding: 20px 40px;  /* Larger status indicators */
+                font-size: 1.3rem;  /* Larger font */
+            }
+        }
+
+        .controls-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;  /* Further reduced gap */
+            flex: 0 0 350px;  /* Increased width to 350px for better usability */
+            height: 100%;
+            overflow: auto;  /* Allow scrolling when needed */
+            max-width: 100%; /* Allow full width on smaller screens */
+        }
+
+
+
+
+        .control-group {
+            background: white;
+            padding: 10px;  /* Further reduced from 14px for more compact layout */
+            border-radius: 8px;  /* Further reduced from 10px */
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);  /* Further reduced shadow */
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            max-width: 100%;  /* Ensure it doesn't grow too wide */
+        }
+
+        .control-group:hover {
+            transform: translateY(-2px);  /* Further reduced from -3px */
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);  /* Further reduced shadow */
+        }
+
+        .control-group h3 {
+            margin-bottom: 8px;  /* Further reduced from 12px */
+            color: #2c3e50;
+            font-size: 1.1rem;  /* Further reduced from 1.2rem */
+            display: flex;
+            align-items: center;
+            gap: 6px;  /* Further reduced from 8px */
+        }
+
+        .control-group h3::before {
+            content: "●";
+            color: #667eea;
+            font-size: 1.2rem;
+        }
+
+        .form-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;  /* Further reduced from 12px */
+            flex-wrap: wrap;
+            gap: 8px;  /* Further reduced from 10px */
+        }
+
+        .form-row.space-between {
+            justify-content: space-between;
+        }
+
+        label {
+            display: inline-block;
+            width: 180px;
+            font-weight: 500;
+            color: #444;
+            font-size: 0.95rem;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            min-width: 220px;
+            height: 8px;  /* Reduced from 10px */
+            border-radius: 8px;  /* Reduced from 10px */
+            background: #e0e0e0;
+            outline: none;
+            -webkit-appearance: none;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;  /* Reduced from 24px */
+            height: 20px;  /* Reduced from 24px */
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);  /* Reduced shadow */
+            transition: all 0.3s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);  /* Reduced from 1.2 */
+            background: #5a6fd8;
+        }
+
+        input[type="number"], input[type="text"], select {
+            padding: 8px 12px;  /* Reduced from 12px 15px */
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;  /* Reduced from 10px */
+            width: 100%;
+            max-width: 250px;
+            font-size: 0.9rem;  /* Reduced from 1rem */
+            transition: all 0.3s ease;
+        }
+
+        input[type="number"]:focus, input[type="text"]:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;  /* Reduced from 60px */
+            height: 26px;  /* Reduced from 34px */
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 26px;  /* Match new height */
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;  /* Reduced from 26px */
+            width: 18px;   /* Reduced from 26px */
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(22px);  /* Adjusted for new toggle size */
+        }
+
+        .btn {
+            padding: 6px 20px;  /* Further reduced from 10px 24px */
+            margin: 4px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;  /* Further reduced border radius */
+            font-size: 0.9rem;  /* Further reduced font size */
+            font-weight: 600;
+            transition: all 0.3s ease;
+            font-family: 'Poppins', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+            color: white;
+            flex: 1;
+            max-width: 160px;  /* Further reduced to match new size */
+        }
+
+        .btn-start:hover {
+            background: linear-gradient(135deg, #009e8a 0%, #85b834 100%);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 176, 155, 0.3);
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+            color: white;
+            flex: 1;
+            max-width: 160px;  /* Further reduced to match new size */
+        }
+
+        .btn-stop:hover {
+            background: linear-gradient(135deg, #e03a5f 0%, #e04427 100%);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(255, 65, 108, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .video-container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            flex: 1;  /* Take all available space */
+            padding: 10px;  /* Reduced from previous 20px */
+        }
+
+        .video-section {
+            flex: 1;  /* Take remaining space */
+            min-width: 600px;  /* Increase minimum width to give more space to video */
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+
+        #videoStream {
+            flex: 1;  /* Take maximum available space */
+            object-fit: contain;  /* Maintain aspect ratio while fitting */
+            height: auto;
+            min-height: 300px;  /* Ensure minimum height */
+            background-color: #000;  /* Black background for video */
+        }
+
+        #videoStream:hover {
+            transform: scale(1.02);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+        }
+
+
+
+        .value-display {
+            display: inline-block;
+            min-width: 50px;  /* Reduced from 60px */
+            text-align: center;
+            font-weight: 700;
+            color: #667eea;
+            font-size: 0.9rem;  /* Reduced from 1.1rem */
+            padding: 0 8px;  /* Reduced from 0 10px */
+        }
+
+        .real-time-note {
+            font-size: 0.75rem;  /* Further reduced from 0.8rem */
+            color: #6c757d;
+            margin-top: 4px;  /* Further reduced from 6px */
+            font-style: italic;
+            padding: 4px;  /* Further reduced from 6px */
+            background-color: #f8f9fa;
+            border-radius: 4px;  /* Further reduced from 6px */
+        }
+
+        .hover-tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .hover-tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .tooltip-text {
+            visibility: hidden;
+            width: 250px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 8px;
+            opacity: 0;
+            transition: opacity 0.3s, visibility 0.3s;
+            font-size: 0.8rem;
+            border: 1px solid #333;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #555 transparent transparent transparent;
+        }
+
+        .feature-info {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            min-width: 120px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            border: 1px solid #e1e5e9;
+        }
+
+        .feature-card.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .logo-icon {
+            font-size: 2rem;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+            40% {transform: translateY(-10px);}
+            60% {transform: translateY(-5px);}
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">👁️</div>
+                <div>
+                    <h1>YOLOv11 Detection System</h1>
+                    <p class="subtitle">Real-time Object Detection, Tracking & Speed Estimation</p>
+                </div>
+                <div class="logo-icon">⚡</div>
+            </div>
+            <div class="connection-indicator" id="connectionIndicator">
+                <div class="connection-dot connected" id="connectionDot" title="Connected"></div>
+            </div>
+        </header>
+
+        <div class="dashboard">
+            <div class="controls-panel">
+                <div class="control-group">
+                    <h3>System Controls</h3>
+                    <div class="form-row space-between">
+                        <button id="startBtn" class="btn btn-start">▶ Start</button>
+                        <button id="stopBtn" class="btn btn-stop" disabled>⏹ Stop</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>Real-time Configuration</h3>
+                    <div class="form-row">
+                        <div class="hover-tooltip">
+                            <label for="confidence">Confidence:&nbsp;</label>
+                            <span class="tooltip-text">Adjusts detection sensitivity in real-time</span>
+                        </div>
+                        <input type="range" id="confidence" min="0" max="1" step="0.01" value="0.25">
+                        <div class="value-display" id="confidenceValue">0.25</div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="hover-tooltip">
+                            <label for="pixelDistance">Distance (mm):&nbsp;</label>
+                            <span class="tooltip-text">Physical distance per pixel (mm)</span>
+                        </div>
+                        <input type="number" id="pixelDistance" min="0.1" max="1000" step="0.1" value="10.0">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="hover-tooltip">
+                            <label for="loiteringThreshold">Loitering Threshold (s):&nbsp;</label>
+                            <span class="tooltip-text">Time threshold for loitering detection (seconds)</span>
+                        </div>
+                        <input type="range" id="loiteringThreshold" min="1" max="60" step="1" value="10">
+                        <div class="value-display" id="loiteringThresholdValue">10</div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>Feature Toggles</h3>
+                    <div class="form-row">
+                        <div class="hover-tooltip">
+                            <label for="speedEstimationToggle">Speed Estimation:&nbsp;</label>
+                            <span class="tooltip-text">Calculates and displays object speeds</span>
+                        </div>
+                        <div class="toggle-container">
+                            <label class="switch">
+                                <input type="checkbox" id="speedEstimationToggle" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="hover-tooltip">
+                            <label for="loiteringToggle">Loitering Detection:&nbsp;</label>
+                            <span class="tooltip-text">Highlights objects present for extended periods (only for persons)</span>
+                        </div>
+                        <div class="toggle-container">
+                            <label class="switch">
+                                <input type="checkbox" id="loiteringToggle">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>Target Configuration</h3>
+                    <div class="form-row">
+                        <div class="hover-tooltip">
+                            <label for="targetLabels">Labels:&nbsp;</label>
+                            <span class="tooltip-text">Comma-separated list of object classes</span>
+                        </div>
+                        <input type="text" id="targetLabels" value="person, car" placeholder="e.g., person, car, bicycle">
+                    </div>
+
+                    <div class="form-row">
+                        <label for="videoSource">Source:</label>
+                        <select id="videoSource">
+                            <option value="camera">Camera</option>
+                            <option value="">Video (Select file...)</option>
+                        </select>
+                        <input type="file" id="videoFileInput" accept="video/*" style="display: none;">
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="video-section">
+                <div class="video-container">
+                    <img id="videoStream" src="/api/video_stream" alt="Video Stream">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const confidenceSlider = document.getElementById('confidence');
+        const confidenceValue = document.getElementById('confidenceValue');
+        const pixelDistanceInput = document.getElementById('pixelDistance');
+        const speedEstimationToggle = document.getElementById('speedEstimationToggle');
+        const loiteringToggle = document.getElementById('loiteringToggle');
+        const loiteringThreshold = document.getElementById('loiteringThreshold');
+        const loiteringThresholdValue = document.getElementById('loiteringThresholdValue');
+        const targetLabelsInput = document.getElementById('targetLabels');
+        const videoSourceSelect = document.getElementById('videoSource');
+        const videoFileInput = document.getElementById('videoFileInput');
+        const connectionDot = document.getElementById('connectionDot');
+        const videoStreamImg = document.getElementById('videoStream');
+
+        // Flags to track user edits
+        let userEditedLabels = false;
+        let userEditedLoitering = false;
+        let userEditedLoiteringThreshold = false;
+        
+
+        // Update confidence value display
+        confidenceSlider.addEventListener('input', () => {
+            confidenceValue.textContent = parseFloat(confidenceSlider.value).toFixed(2);
+            updateRealtimeConfig('confidence_threshold', parseFloat(confidenceSlider.value));
+        });
+
+        // Update pixel distance - using input event for real-time updates with debounce
+        let pixelDistanceTimeout;
+        pixelDistanceInput.addEventListener('input', () => {
+            clearTimeout(pixelDistanceTimeout);
+            const value = parseFloat(pixelDistanceInput.value);
+            if (!isNaN(value) && value >= 0.1 && value <= 1000) {
+                // Update with a short delay to prevent too many rapid calls
+                pixelDistanceTimeout = setTimeout(() => {
+                    updateRealtimeConfig('pixel_distance_mm', value);
+                }, 300);
+            }
+        });
+
+        // Immediately send the final value when the input loses focus
+        pixelDistanceInput.addEventListener('blur', () => {
+            clearTimeout(pixelDistanceTimeout);
+            const value = parseFloat(pixelDistanceInput.value);
+            if (!isNaN(value) && value >= 0.1 && value <= 1000) {
+                updateRealtimeConfig('pixel_distance_mm', value);
+            }
+        });
+
+        // Update loitering threshold value display
+        loiteringThreshold.addEventListener('input', () => {
+            userEditedLoiteringThreshold = true;
+            loiteringThresholdValue.textContent = loiteringThreshold.value;
+            updateRealtimeConfig('loitering_threshold', parseFloat(loiteringThreshold.value));
+        });
+
+        // Update loitering detection toggle
+        loiteringToggle.addEventListener('change', () => {
+            userEditedLoitering = true;
+            updateRealtimeConfig('enable_loitering_detection', loiteringToggle.checked);
+        });
+
+        // Track user edits to the target labels field
+        targetLabelsInput.addEventListener('input', () => {
+            userEditedLabels = true;
+        });
+
+        targetLabelsInput.addEventListener('change', () => {
+            userEditedLabels = true;
+        });
+
+        // Handle video source selection
+        videoSourceSelect.addEventListener('change', () => {
+            if (videoSourceSelect.value === "") { // Video option selected
+                // Show file dialog
+                videoFileInput.click();
+            }
+        });
+
+        // Handle video file selection
+        videoFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                // Create a local URL for the selected video file
+                const videoUrl = URL.createObjectURL(file);
+                // Update the select to show the selected file
+                videoSourceSelect.value = videoUrl;
+
+                // Remove any previously added dynamic option
+                const existingOption = document.getElementById('selected-video-option');
+                if (existingOption) {
+                    existingOption.remove();
+                }
+
+                // Add a new option showing the selected file
+                const option = document.createElement('option');
+                option.id = 'selected-video-option';
+                option.value = videoUrl;
+                option.textContent = `Video: ${file.name}`;
+                videoSourceSelect.appendChild(option);
+
+                // Select the new option
+                videoSourceSelect.value = videoUrl;
+            }
+        });
+
+
+        // Start detection button
+        startBtn.addEventListener('click', () => {
+            startDetection();
+        });
+
+        // Stop detection button
+        stopBtn.addEventListener('click', () => {
+            stopDetection();
+        });
+
+        // Update status periodically
+        setInterval(updateStatus, 2000);
+
+        // Function implementations
+        function startDetection() {
+            startBtn.disabled = true;
+
+            // Check if the selected video source is a local file to be uploaded
+            const selectedOption = videoSourceSelect.options[videoSourceSelect.selectedIndex];
+            if (selectedOption.id === 'selected-video-option' && videoFileInput.files.length > 0) {
+                // Upload the file first
+                const file = videoFileInput.files[0];
+                const formData = new FormData();
+                formData.append('video_file', file);
+
+                fetch('/api/upload_video', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(resp => resp.json())
+                .then(uploadData => {
+                    if (uploadData.success) {
+                        // File uploaded successfully, now start detection with the uploaded path
+                        return fetch('/api/start', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                video_source: uploadData.file_path,
+                                confidence_threshold: parseFloat(confidenceSlider.value),
+                                pixel_distance_mm: parseFloat(pixelDistanceInput.value),
+                                enable_speed_estimation: speedEstimationToggle.checked,
+                                enable_loitering_detection: loiteringToggle.checked,
+                                loitering_threshold: parseFloat(loiteringThreshold.value),
+                                target_labels: targetLabelsInput.value.split(',').map(label => label.trim()).filter(label => label.length > 0)
+                            })
+                        });
+                    } else {
+                        throw new Error('File upload failed');
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Start response:', data);
+                    // Reset the user edit flags since changes have been sent to backend
+                    userEditedLabels = false;
+                    userEditedLoitering = false;
+                    userEditedLoiteringThreshold = false;
+                    setTimeout(() => updateStatus(), 500); // Update status after start
+                })
+                .catch(error => {
+                    console.error('Error starting detection:', error);
+                    startBtn.disabled = false;
+                    alert('Error starting detection: ' + error.message);
+                });
+            } else {
+                // Use the selected value directly (for camera or existing server files)
+                fetch('/api/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        video_source: videoSourceSelect.value,
+                        confidence_threshold: parseFloat(confidenceSlider.value),
+                        pixel_distance_mm: parseFloat(pixelDistanceInput.value),
+                        enable_speed_estimation: speedEstimationToggle.checked,
+                        enable_loitering_detection: loiteringToggle.checked,
+                        loitering_threshold: parseFloat(loiteringThreshold.value),
+                        target_labels: targetLabelsInput.value.split(',').map(label => label.trim()).filter(label => label.length > 0)
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Start response:', data);
+                    // Reset the user edit flags since changes have been sent to backend
+                    userEditedLabels = false;
+                    userEditedLoitering = false;
+                    userEditedLoiteringThreshold = false;
+                    setTimeout(() => updateStatus(), 500); // Update status after start
+                })
+                .catch(error => {
+                    console.error('Error starting detection:', error);
+                    startBtn.disabled = false;
+                    alert('Error starting detection: ' + error.message);
+                });
+            }
+        }
+
+        function stopDetection() {
+            stopBtn.disabled = true;
+
+            fetch('/api/stop', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Stop response:', data);
+                // Reset the user edit flags when stopping so backend config is shown
+                userEditedLabels = false;
+                userEditedLoitering = false;
+                userEditedLoiteringThreshold = false;
+                setTimeout(() => updateStatus(), 500); // Update status after stop
+            })
+            .catch(error => {
+                console.error('Error stopping detection:', error);
+                stopBtn.disabled = false;
+                alert('Error stopping detection: ' + error.message);
+            });
+        }
+
+        function updateRealtimeConfig(key, value) {
+            // Send real-time configuration update
+            fetch('/api/config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ [key]: value })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(`Updated ${key} to ${value}:`, data);
+            })
+            .catch(error => {
+                console.error(`Error updating ${key}:`, error);
+            });
+        }
+
+        function updateStatus() {
+            fetch('/api/status')
+            .then(response => response.json())
+            .then(data => {
+                // Update connection indicator - when we successfully get status, we're connected
+                connectionDot.className = 'connection-dot connected';
+                connectionDot.title = 'Connected';
+
+                // Update UI based on status
+                startBtn.disabled = data.running;
+                stopBtn.disabled = !data.running;
+
+                // Update form fields based on the config if stopped
+                if (!data.running) {
+                    confidenceSlider.value = data.config.confidence_threshold;
+                    confidenceValue.textContent = parseFloat(data.config.confidence_threshold).toFixed(2);
+                    pixelDistanceInput.value = data.config.pixel_distance_mm;
+                    speedEstimationToggle.checked = data.config.enable_speed_estimation;
+                    // Only update loitering detection from backend if user hasn't edited it
+                    if (!userEditedLoitering) {
+                        loiteringToggle.checked = data.config.enable_loitering_detection;
+                    }
+                    // Only update loitering threshold from backend if user hasn't edited it
+                    if (!userEditedLoiteringThreshold) {
+                        loiteringThreshold.value = data.config.loitering_threshold;
+                        loiteringThresholdValue.textContent = data.config.loitering_threshold;
+                    }
+                    // Only update target labels from backend if user hasn't edited them
+                    if (!userEditedLabels) {
+                        targetLabelsInput.value = data.config.target_labels.join(', ');
+                    }
+                    // Only update video source from backend if user hasn't selected a file
+                    if (!videoSourceSelect.querySelector('#selected-video-option')) {
+                        videoSourceSelect.value = data.config.video_source;
+                    }
+
+                }
+            })
+            .catch(error => {
+                console.error('Error getting status:', error);
+                // Update connection indicator to show disconnected state
+                connectionDot.className = 'connection-dot disconnected';
+                connectionDot.title = 'Disconnected';
+            });
+        }
+
+        // Initialize page
+        updateStatus();
+    </script>
+</body>
+</html>

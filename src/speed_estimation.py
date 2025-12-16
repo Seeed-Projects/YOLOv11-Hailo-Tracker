@@ -128,12 +128,13 @@ class SpeedEstimationManager:
     def __init__(self, pixel_distance: float = 0.01, fps: float = 30.0):
         """
         Initialize the speed estimation manager
-        
+
         Args:
             pixel_distance (float): Real-world distance per pixel in meters
             fps (float): Frames per second of the video stream
         """
         self.speed_estimator = SpeedEstimator(pixel_distance=pixel_distance, fps=fps)
+        self.fps = fps  # Store fps at the manager level
         self.track_timestamps = {}  # Keep track of timestamps for each track
         
     def estimate_speed(self, track_id: int, bbox: List[float], 
