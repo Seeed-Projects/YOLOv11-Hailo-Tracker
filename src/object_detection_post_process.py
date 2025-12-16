@@ -127,7 +127,7 @@ def inference_result_handler(original_frame, infer_results, labels, config_data,
     return frame_with_detections
 
 
-def draw_detection(image: np.ndarray, box: list, labels: list, score: float, color: tuple, track=False, speed=None):
+def draw_detection(image: np.ndarray, box: list, labels: list, score: float, color: tuple, track=False, speed=None, is_loitering=False):
     """
     Draw box and label for one detection.
 
@@ -166,6 +166,21 @@ def draw_detection(image: np.ndarray, box: list, labels: list, score: float, col
     # Draw top text with black border first
     cv2.putText(image, top_text, (xmin + 4, ymin + 20), font, 0.5, border_color, 2, cv2.LINE_AA)
     cv2.putText(image, top_text, (xmin + 4, ymin + 20), font, 0.5, text_color, 1, cv2.LINE_AA)
+
+    # Add loitering label if applicable
+    if is_loitering:
+        # Position loitering label above the detection box
+        loitering_text = "Loitering"
+        loitering_y = ymin - 5  # Slightly above the detection box
+
+        # Draw loitering label with red background and white text
+        loitering_text_size = cv2.getTextSize(loitering_text, font, 0.5, 1)[0]
+        loitering_x = xmin  # Start from the left of the box
+        cv2.rectangle(image,
+                     (loitering_x, loitering_y - loitering_text_size[1] - 4),
+                     (loitering_x + loitering_text_size[0], loitering_y + 4),
+                     (0, 0, 255), -1)  # Red background
+        cv2.putText(image, loitering_text, (loitering_x, loitering_y), font, 0.5, (255, 255, 255), 1, cv2.LINE_AA)  # White text
 
     # Draw bottom text if exists
     if bottom_text:
@@ -343,17 +358,16 @@ def draw_detections(detections: dict, img_out: np.ndarray, labels, tracker=None,
             if best_idx is not None:  # Only process if we found a matching detection
                 current_track_ids.add(track_id)
 
-                # Get original color based on class
-                color = tuple(id_to_color(classes[best_idx]).tolist())  # color based on class
+                # Use green color for all normal detections
+                color = (0, 255, 0)  # Green color for all normal detections
 
-                # Check for loitering if enabled and person is detected (if required)
+                # Check for loitering if enabled and person is detected
                 is_loitering = False
                 if loitering_detection:
-                    # Check if person detection is required and if this is a person
+                    # Only check loitering for person objects, regardless of enable_person_only setting
                     is_person = (person_class_index != -1 and classes[best_idx] == person_class_index)
-                    is_relevant = (not enable_person_only or is_person)
 
-                    if is_relevant and loitering_manager:
+                    if is_person and loitering_manager:
                         # Update the loitering manager with this track
                         loitering_manager.update_track(track_id)
                         is_loitering = loitering_manager.is_loitering(track_id)
@@ -377,7 +391,7 @@ def draw_detections(detections: dict, img_out: np.ndarray, labels, tracker=None,
 
                 # Only draw pedestrian detections with tracking info and speed
                 draw_detection(img_out, [xmin, ymin, xmax, ymax], [labels[classes[best_idx]], f"ID {track_id}"],
-                               track.score * 100.0, color, track=True, speed=display_speed)
+                               track.score * 100.0, color, track=True, speed=display_speed, is_loitering=is_loitering)
 
         # Clean up the loitering manager with tracks that are no longer present
         if loitering_manager:
@@ -387,8 +401,8 @@ def draw_detections(detections: dict, img_out: np.ndarray, labels, tracker=None,
     else:
         #No tracking — draw raw model detections (only pedestrians and cars)
         for idx in range(num_detections):
-            color = tuple(id_to_color(classes[idx]).tolist())  #color based on class
-            draw_detection(img_out, boxes[idx], [labels[classes[idx]]], scores[idx] * 100.0, color)
+            color = (0, 255, 0)  # Green color for all normal detections
+            draw_detection(img_out, boxes[idx], [labels[classes[idx]]], scores[idx] * 100.0, color, is_loitering=False)
 
     return img_out
 

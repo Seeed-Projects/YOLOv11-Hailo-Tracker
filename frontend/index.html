@@ -152,12 +152,6 @@
             .dashboard {
                 flex-direction: column;
             }
-        }
-
-        @media (max-width: 1200px) {
-            .dashboard {
-                flex-direction: column;
-            }
 
             .controls-panel {
                 min-width: unset;  /* Remove min-width constraint on smaller screens */
@@ -220,33 +214,14 @@
             display: flex;
             flex-direction: column;
             gap: 8px;  /* Further reduced gap */
-            flex: 0 0 300px;  /* Take exactly 300px width, don't grow or shrink */
+            flex: 0 0 350px;  /* Increased width to 350px for better usability */
             height: 100%;
-            overflow: hidden;  /* Prevent scrolling */
+            overflow: auto;  /* Allow scrolling when needed */
+            max-width: 100%; /* Allow full width on smaller screens */
         }
 
-        .video-section {
-            flex: 1;  /* Take remaining space */
-            min-width: 500px;  /* Increased minimum width for better video display */
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
 
-        .video-container {
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            flex: 1;  /* Take all available space */
-        }
 
-        #videoStream {
-            flex: 1;  /* Take maximum available space */
-            object-fit: contain;  /* Maintain aspect ratio while fitting */
-            height: auto;
-            min-height: 300px;  /* Ensure minimum height */
-            background-color: #000;  /* Black background for video */
-        }
 
         .control-group {
             background: white;
@@ -442,31 +417,36 @@
         }
 
         .video-container {
-            text-align: center;
-            margin: 20px 0;
-            padding: 20px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            flex: 1;  /* Take all available space */
+            padding: 10px;  /* Reduced from previous 20px */
         }
 
-        .video-container h3 {
-            margin-bottom: 20px;
-            color: #2c3e50;
-            font-size: 1.5rem;
+        .video-section {
+            flex: 1;  /* Take remaining space */
+            min-width: 600px;  /* Increase minimum width to give more space to video */
+            height: 100%;
+            display: flex;
+            flex-direction: column;
         }
+
 
         #videoStream {
-            max-width: 100%;
+            flex: 1;  /* Take maximum available space */
+            object-fit: contain;  /* Maintain aspect ratio while fitting */
             height: auto;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-            border: 2px solid #e1e5e9;
-            background-color: #000;
-            transition: all 0.3s ease;
+            min-height: 300px;  /* Ensure minimum height */
+            background-color: #000;  /* Black background for video */
         }
 
         #videoStream:hover {
             transform: scale(1.02);
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
         }
+
+
 
         .value-display {
             display: inline-block;
@@ -682,7 +662,6 @@
 
             <div class="video-section">
                 <div class="video-container">
-                    <h3>Live Detection Feed</h3>
                     <img id="videoStream" src="/api/video_stream" alt="Video Stream">
                 </div>
             </div>

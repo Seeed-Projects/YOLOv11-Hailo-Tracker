@@ -44,7 +44,6 @@ CORS(app)  # Enable CORS for cross-origin requests
 def create_detection_pipeline(config):
     """Create a detection pipeline that can handle real-time configuration updates."""
     global is_running, stop_event
-    from object_detection import run_inference_pipeline
     from utils.toolbox import get_labels, load_json_file
     from functools import partial
     from types import SimpleNamespace
@@ -142,7 +141,7 @@ def create_detection_pipeline(config):
                 loitering_detection=current_loitering_enabled,
                 loitering_manager=loitering_manager,
                 loitering_threshold=current_loitering_threshold,
-                enable_person_only="person" in config["target_labels"]
+                enable_person_only=False  # Loitering detection is now handled specifically for person labels in the post-processing logic
             )
 
             # Put the processed frame in our queue for streaming
