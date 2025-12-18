@@ -1,4 +1,4 @@
-ARG BUILD_FROM=ubuntu:20.04
+ARG BUILD_FROM=python:3.13-slim
 FROM ${BUILD_FROM} as build
 
 ARG HAILO_VERSION
@@ -19,13 +19,13 @@ RUN \
     git \
     make \
     zip \
-    unzip \
+    unzip" && \
+    apt-get -yqq update && \
+    apt-get install -yq --no-install-recommends ${buildDeps} \
     python3-dev \
     python3-pip \
     python3-setuptools \
-    python3-wheel" && \
-    apt-get -yqq update && \
-    apt-get install -yq --no-install-recommends ${buildDeps}
+    python3-wheel
 
 # Compile hailort
 RUN \
@@ -51,18 +51,16 @@ RUN \
     ls -al /wheels/
 
 # Copy application files and install dependencies
-FROM ${BUILD_FROM}
+FROM python:3.13-slim
 
 ARG HAILO_VERSION
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -yq --no-install-recommends \
-    python3 \
-    python3-pip \
-    python3-dev \
     ca-certificates \
     git \
     curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy hailort binaries and libraries from the build stage

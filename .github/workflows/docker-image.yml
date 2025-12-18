@@ -1,4 +1,4 @@
-name: Build and Push Hailo-Compatible Docker Images
+name: Build and Push Hailo-Compatible Docker Images for Python 3.13 on Raspberry Pi
 
 on:
   push:
@@ -9,6 +9,7 @@ on:
 
 env:
   HAILO_VERSION: '4.23.0'  # Default Hailo version - override as needed
+  PYTHON_VERSION: '3.13'
 
 jobs:
   build-and-test:
@@ -49,7 +50,7 @@ jobs:
 
     strategy:
       matrix:
-        platform: [linux/amd64, linux/arm64]
+        platform: [linux/amd64, linux/arm64, linux/arm/v7]
 
     steps:
     - name: Checkout code
@@ -138,14 +139,36 @@ jobs:
         cache-to: type=gha,mode=max
         outputs: type=docker,dest=/tmp/yolov11-hailo-${{ steps.tag.outputs.tag }}-arm64.tar
 
+    - name: Build Docker image locally for ARMv7
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        load: true
+        tags: yolov11-hailo-${{ steps.tag.outputs.tag }}:armv7
+        build-args: |
+          HAILO_VERSION=${{ env.HAILO_VERSION }}
+        platforms: linux/arm/v7
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        outputs: type=docker,dest=/tmp/yolov11-hailo-${{ steps.tag.outputs.tag }}-armv7.tar
+
     - name: Save AMD64 image
       run: |
         docker save yolov11-hailo-${{ steps.tag.outputs.tag }}:amd64 -o /tmp/yolov11-hailo-${{ steps.tag.outputs.tag }}-amd64.tar
+
+    - name: Save ARM64 image
+      run: |
+        docker save yolov11-hailo-${{ steps.tag.outputs.tag }}:arm64 -o /tmp/yolov11-hailo-${{ steps.tag.outputs.tag }}-arm64.tar
+
+    - name: Save ARMv7 image
+      run: |
+        docker save yolov11-hailo-${{ steps.tag.outputs.tag }}:armv7 -o /tmp/yolov11-hailo-${{ steps.tag.outputs.tag }}-armv7.tar
 
     - name: Compress Docker images
       run: |
         gzip /tmp/yolov11-hailo-${{ steps.tag.outputs.tag }}-amd64.tar
         gzip /tmp/yolov11-hailo-${{ steps.tag.outputs.tag }}-arm64.tar
+        gzip /tmp/yolov11-hailo-${{ steps.tag.outputs.tag }}-armv7.tar
 
     - name: Create Release and Upload Assets
       uses: softprops/action-gh-release@v1
@@ -153,12 +176,14 @@ jobs:
         tag_name: ${{ steps.tag.outputs.tag }}
         name: Release ${{ steps.tag.outputs.tag }}
         body: |
-          Docker images for YOLOv11 with Hailo support
+          Docker images for YOLOv11 with Hailo support for Python 3.13 on Raspberry Pi
 
           - AMD64 Docker image: yolov11-hailo-${{ steps.tag.outputs.tag }}-amd64.tar.gz
           - ARM64 Docker image: yolov11-hailo-${{ steps.tag.outputs.tag }}-arm64.tar.gz
+          - ARMv7 Docker image: yolov11-hailo-${{ steps.tag.outputs.tag }}-armv7.tar.gz
         files: |
           /tmp/yolov11-hailo-${{ steps.tag.outputs.tag }}-amd64.tar.gz
           /tmp/yolov11-hailo-${{ steps.tag.outputs.tag }}-arm64.tar.gz
+          /tmp/yolov11-hailo-${{ steps.tag.outputs.tag }}-armv7.tar.gz
         draft: false
         prerelease: false
