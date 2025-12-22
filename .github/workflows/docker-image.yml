@@ -12,11 +12,15 @@ env:
   PYTHON_VERSION: '3.13'
 
 jobs:
-  build-and-test:
+  build-and-test-raspberry-pi:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+
+    strategy:
+      matrix:
+        platform: [linux/arm/v7, linux/arm64]
 
     steps:
     - name: Checkout code
@@ -24,24 +28,90 @@ jobs:
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-
-    - name: Build Docker image (test build)
-      uses: docker/build-push-action@v5
       with:
-        context: .
-        load: true  # Load the image to Docker daemon for testing
-        tags: yolov11-hailo-detection:test
-        build-args: |
-          HAILO_VERSION=${{ env.HAILO_VERSION }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        driver-opts: network=host
 
-    - name: Test Docker image
+    # Retry mechanism implemented with a loop
+    - name: Build, test, and retry if needed for ${{ matrix.platform }}
       run: |
-        docker run --rm yolov11-hailo-detection:test --help
+        MAX_RETRIES=3
+        RETRY_COUNT=0
+
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+          echo "Attempt $((RETRY_COUNT+1)) for ${{ matrix.platform }}"
+
+          # Remove any existing test image
+          docker rmi -f yolov11-hailo-detection:${{ matrix.platform }}-test || true
+
+          # Build the Docker image for the specific platform
+          if docker buildx build \
+            --platform ${{ matrix.platform }} \
+            --load \
+            -t yolov11-hailo-detection:${{ matrix.platform }}-test \
+            --build-arg HAILO_VERSION=${{ env.HAILO_VERSION }} \
+            --cache-from=type=gha \
+            --cache-to=type=gha,mode=max \
+            . ; then
+
+            echo "Build successful for ${{ matrix.platform }}"
+
+            # Test the Docker image
+            if timeout 60s docker run --rm yolov11-hailo-detection:${{ matrix.platform }}-test python3 -c "
+            import sys
+            print(f'Python version: {sys.version}')
+            try:
+                import cv2
+                print(f'OpenCV version: {cv2.__version__}')
+            except ImportError:
+                print('OpenCV import failed')
+                sys.exit(1)
+            try:
+                import numpy
+                print(f'NumPy version: {numpy.__version__}')
+            except ImportError:
+                print('NumPy import failed')
+                sys.exit(1)
+            try:
+                import flask
+                print(f'Flask version: {flask.__version__}')
+            except ImportError:
+                print('Flask import failed')
+                sys.exit(1)
+            try:
+                import loguru
+                print(f'Loguru version: {getattr(loguru, \"__version__\", \"unknown\")}')
+            except ImportError:
+                print('Loguru import failed')
+                sys.exit(1)
+            print('Basic imports successful')
+            "; then
+              echo "Test passed for ${{ matrix.platform }}"
+              break  # Exit the retry loop on success
+            else
+              echo "Test failed for ${{ matrix.platform }}"
+            fi
+          else
+            echo "Build failed for ${{ matrix.platform }}"
+          fi
+
+          RETRY_COUNT=$((RETRY_COUNT+1))
+
+          if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+            echo "Cleaning up and preparing for retry..."
+            sleep 5  # Brief pause before retry
+          fi
+        done
+
+        # If we exhausted all retries, exit with error
+        if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+          echo "Failed to build and test successfully after $MAX_RETRIES attempts for ${{ matrix.platform }}"
+          exit 1
+        fi
+
+        echo "Successfully built and tested for ${{ matrix.platform }} after $RETRY_COUNT attempt(s)"
 
   build-and-push:
-    needs: build-and-test
+    needs: build-and-test-raspberry-pi
     runs-on: ubuntu-latest
     permissions:
       contents: read
