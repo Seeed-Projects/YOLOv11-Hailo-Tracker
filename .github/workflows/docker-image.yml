@@ -37,17 +37,20 @@ jobs:
         MAX_RETRIES=3
         RETRY_COUNT=0
 
+        # Replace forward slashes in platform name for valid Docker tag
+        PLATFORM_TAG=$(echo "${{ matrix.platform }}" | sed 's|/|-|g')
+
         while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-          echo "Attempt $((RETRY_COUNT+1)) for ${{ matrix.platform }}"
+          echo "Attempt $((RETRY_COUNT+1)) for ${{ matrix.platform }} (tag: $PLATFORM_TAG)"
 
           # Remove any existing test image
-          docker rmi -f yolov11-hailo-detection:${{ matrix.platform }}-test || true
+          docker rmi -f yolov11-hailo-detection:$PLATFORM_TAG-test || true
 
           # Build the Docker image for the specific platform
           if docker buildx build \
             --platform ${{ matrix.platform }} \
             --load \
-            -t yolov11-hailo-detection:${{ matrix.platform }}-test \
+            -t yolov11-hailo-detection:$PLATFORM_TAG-test \
             --build-arg HAILO_VERSION=${{ env.HAILO_VERSION }} \
             --cache-from=type=gha \
             --cache-to=type=gha,mode=max \
@@ -56,7 +59,7 @@ jobs:
             echo "Build successful for ${{ matrix.platform }}"
 
             # Test the Docker image
-            if timeout 60s docker run --rm yolov11-hailo-detection:${{ matrix.platform }}-test python3 -c "
+            if timeout 60s docker run --rm yolov11-hailo-detection:$PLATFORM_TAG-test python3 -c "
             import sys
             print(f'Python version: {sys.version}')
             try:
