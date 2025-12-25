@@ -15,11 +15,11 @@ def main():
     """Main function to run the API server."""
     from src.api_server import app
     print("Starting YOLOv11-Speed API server...")
-    print("Access the web interface at: http://localhost:5000/")
-    print("API endpoints available at: http://localhost:5000/api/")
+    print("Access the web interface at: http://localhost:8000/")
+    print("API endpoints available at: http://localhost:8000/api/")
     
     # Start the API server
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=8000, debug=False, threaded=True)
 
 if __name__ == "__main__":
     main()
