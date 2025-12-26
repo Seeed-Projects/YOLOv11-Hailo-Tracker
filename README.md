@@ -109,18 +109,20 @@ docker run -it --rm   -p 8000:8000   --privileged   --device /dev/hailo0:/dev/ha
 Create a `docker-compose.yml` file:
 
 ```yaml
-version: '3.8'
 services:
   yolov11-hailo-tracker:
     image: ghcr.io/seeed-projects/yolov11-hailo-tracker-hailo:latest
+    container_name: yolov11-hailo-tracker
+    privileged: true 
     ports:
       - "8000:8000"
     devices:
-      - /dev:/dev  # For Hailo device access
-    volumes:
-      - ./videos:/app/videos  # Mount videos directory
+      - "/dev/hailo0:/dev/hailo0"
+      - "/dev/video0:/dev/video0" 
     environment:
-      - HAILORT_LOGGER_PATH=NONE
+      - PYTHONUNBUFFERED=1
+    command: python3 run_api.py
+    restart: unless-stopped
 ```
 
 Then run:
