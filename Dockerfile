@@ -5,15 +5,14 @@ ARG TARGETPLATFORM=linux/arm64
 ARG HAILO_VERSION="4.23.0"
 
 ############################
-# Stage 1: Build Stage
+# Stage 1: Build Stage (编译阶段)
 ############################
-# 使用 TARGETPLATFORM 确保在模拟环境下生成 100% 兼容的 arm64 依赖
 FROM --platform=$TARGETPLATFORM python:3.13-slim AS build
 
 ARG HAILO_VERSION
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 安装构建必需工具
+# 安装构建必需的系统工具
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates git cmake build-essential \
     autoconf automake unzip zip python3-dev pkg-config \
@@ -28,40 +27,39 @@ RUN git clone --branch v${HAILO_VERSION} --depth 1 https://github.com/hailo-ai/h
     && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build --target install --parallel $(nproc)
 
-# 2. 预编译项目依赖包
+# 2. 预编译项目 requirements.txt 中的依赖
 WORKDIR /wheels
 COPY requirements.txt .
 RUN pip wheel --no-cache-dir --wheel-dir=/wheels -r requirements.txt
 
-# 3. 关键修复：编译 HailoRT 绑定及其隐藏依赖 (如 argcomplete)
+# 3. 核心修复：自动解析并打包 HailoRT Python 绑定的依赖 (如 argcomplete)
 WORKDIR /tmp/hailort/hailort/libhailort/bindings/python/platform
-# 此步骤会扫描 setup.py 并将缺失的依赖下载编译为 wheel 存入 /wheels
 RUN pip wheel --no-cache-dir --wheel-dir=/wheels .
-# 生成 hailort 自身的 wheel
 RUN python setup.py bdist_wheel --dist-dir=/wheels
 
 ############################
-# Stage 2: Runtime Stage
+# Stage 2: Runtime Stage (运行阶段)
 ############################
 FROM --platform=$TARGETPLATFORM python:3.13-slim AS runtime
 
 ARG HAILO_VERSION
 ENV DEBIAN_FRONTEND=noninteractive \
     HAILORT_LOGGER_PATH=NONE \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
-# 安装运行期最小依赖
+# 安装运行期最小依赖库
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libstdc++6 libgcc-s1 libglib2.0-0 libgl1 curl \
  && rm -rf /var/lib/apt/lists/*
 
-# 从构建阶段拷贝 HailoRT 二进制成果
+# 从构建阶段拷贝 HailoRT 二进制库
 COPY --from=build /usr/local/lib/libhailort.so.${HAILO_VERSION} /usr/local/lib/
 COPY --from=build /usr/local/bin/hailortcli /usr/local/bin/
-# 拷贝所有预编译好的 .whl 文件 (现在包含了 argcomplete)
+# 拷贝所有预编译好的 .whl 文件
 COPY --from=build /wheels /tmp/wheels
 
-# 强制使用本地 Wheels 安装
+# 4. 强制离线安装，确保不触发源码编译
 RUN pip install --no-cache-dir --no-index --find-links=/tmp/wheels /tmp/wheels/*.whl \
  && rm -rf /tmp/wheels \
  && ldconfig
@@ -69,3 +67,10 @@ RUN pip install --no-cache-dir --no-index --find-links=/tmp/wheels /tmp/wheels/*
 # 应用部署
 WORKDIR /app
 COPY . .
+
+# 暴露端口 (根据 app.py 中的设置)
+EXPOSE 5000
+
+# 5. 设置启动指令，防止进入 Python 交互界面
+# 假设您的入口文件是项目根目录下的 app.py
+CMD ["python3", "app.py"]
