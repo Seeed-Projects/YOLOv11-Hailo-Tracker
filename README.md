@@ -76,7 +76,7 @@ YOLOv11-Hailo-Tracker is a comprehensive real-time object detection, tracking, a
   ```bash
   python run_api.py
   ```
-5. Access `localhost:5000` to reach the frontend and configure settings.
+5. Access `localhost:8000` to reach the frontend and configure settings.
 
 ![alt text](./img/image.png)
 
