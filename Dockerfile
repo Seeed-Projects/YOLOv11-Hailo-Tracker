@@ -58,11 +58,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 从构建阶段拷贝二进制成果
 COPY --from=build /usr/local/lib/libhailort.so.${HAILO_VERSION} /usr/local/lib/
 COPY --from=build /usr/local/bin/hailortcli /usr/local/bin/
-COPY --from=build /wheels /tmp/wheels
 
 # 4. 离线安装
-RUN pip install --no-cache-dir --no-index --find-links=/tmp/wheels /tmp/wheels/*.whl \
- && rm -rf /tmp/wheels \
+# The wheels are bind-mounted from the build stage rather than COPYed in. A
+# COPY commits them to their own layer, and the `rm -rf` that used to follow
+# could only write a whiteout on top of that layer -- it cannot remove a layer
+# that is already committed, so the wheels shipped in every pull. A bind mount
+# is never committed to a layer, so there is nothing left to remove.
+RUN --mount=type=bind,from=build,source=/wheels,target=/tmp/wheels \
+    pip install --no-cache-dir --no-index --find-links=/tmp/wheels /tmp/wheels/*.whl \
  && ldconfig
 
 WORKDIR /app
